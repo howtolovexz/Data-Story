@@ -19,8 +19,8 @@ maxTweets = 100000  # Some arbitrary large number
 tweetsPerQry = 100  # this is the max the API permits
 since_date = "2018-07-11"
 until_date = "2018-07-12"
-file_name = "../data/rawData/worldcup" + since_date + "-5.csv"
-file_name2 = "../data/rawData/worldcup" + since_date + "-5.txt"
+file_name = "../../data/rawData/worldcup" + since_date + "-8.csv"
+file_name2 = "../../data/rawData/worldcup" + since_date + "-8.txt"
 # Open/Create a file to append data
 csvFile = open(file_name, 'a', encoding="utf-8")
 jsonFile = open(file_name2, 'a', encoding="utf-8")
@@ -34,7 +34,7 @@ sinceId = None
 # If results only below a specific ID are, set max_id to that ID.
 # else default to no upper limit, start from the most recent tweet matching the search query.
 # max_id = -1
-max_id = 1017134916448989184
+max_id = 1016995804421283840
 
 tweetCount = 0
 print("Downloading max {0} tweets".format(maxTweets))

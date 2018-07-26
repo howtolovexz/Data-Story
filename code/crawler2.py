@@ -17,10 +17,10 @@ api = tweepy.API(auth, wait_on_rate_limit=True)
 searchQuery = "#fifa OR #wc2018 OR #fifaworldcup OR #worldcup OR #russia2018"  # this is what we're searching for
 maxTweets = 100000  # Some arbitrary large number
 tweetsPerQry = 100  # this is the max the API permits
-since_date = "2018-07-14"
-until_date = "2018-07-15"
-file_name = "../data/rawData/worldcup" + since_date + "-2.csv"
-file_name2 = "../data/rawData/worldcup" + since_date + "-2.txt"
+since_date = "2018-07-17"
+until_date = "2018-07-18"
+file_name = "../../data/rawData/worldcup" + since_date + "-1.csv"
+file_name2 = "../../data/rawData/worldcup" + since_date + "-1.txt"
 # Open/Create a file to append data
 csvFile = open(file_name, 'a', encoding="utf-8")
 jsonFile = open(file_name2, 'a', encoding="utf-8")
@@ -33,8 +33,8 @@ sinceId = None
 
 # If results only below a specific ID are, set max_id to that ID.
 # else default to no upper limit, start from the most recent tweet matching the search query.
-# max_id = -1
-max_id = 1018169623341092864
+max_id = -1
+# max_id = 1018648952680247296
 
 tweetCount = 0
 print("Downloading max {0} tweets".format(maxTweets))

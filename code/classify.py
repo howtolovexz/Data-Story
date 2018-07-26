@@ -5,20 +5,19 @@ import numpy as np
 from datetime import datetime
 
 
-def getOriginalTweets(df):
+def getOriginalTweets(df): # get dataframe with original tweet only
     df_original = df.loc[df['retweeted_status'] == False]
-    df_original = df_original.sort_values(by=['rt'], ascending=False)
+    # df_original = df_original.sort_values(by=['rt'], ascending=False)
     return df_original
 
 
-def getRetweetedTweets(df):
+def getRetweetedTweets(df): # get dataframe with retweeted tweet only
     df_retweeted = df.loc[df['retweeted_status'] == True]
-    df_retweeted = df_retweeted.sort_values(by=['rt'], ascending=False)
+    # df_retweeted = df_retweeted.sort_values(by=['rt'], ascending=False)
     return df_retweeted
 
 
-
-def getTweetCountList(df):
+def getTweetCountList(df): # get tweet count by hour
     tweetCountList = []
     date = df['created_at'].iloc[0]
     dateStr = date.strftime('%Y-%m-%d')
@@ -90,8 +89,17 @@ def countTweetContainNumbers(df):
             count = count + 1
     return count
 
-date = "2018-06-30"
-inputFileName = "data/rawDataFromJSON/worldcup" + date + ".csv"
+def removeNonNumberTweet(df):
+    df_temp = df.loc[df.iloc[:, 1].str.contains(r'\d')]
+    return df_temp
+
+def excludeLink(df):
+    df = df.replace(regex=r"http\S+", value='')
+    return df
+
+date = '2018-06-30'
+inputFilePath = '../../data/rawDataFromJSON/'
+inputFileName = inputFilePath + 'worldcup' + date + '.csv'
 
 colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status']
 df = pd.read_csv(inputFileName, names=colnames)
@@ -107,7 +115,13 @@ retweetedTweetCountList = getTweetCountList(df_retweeted)
 #
 # plotStackedTweetsHistrogram(originalTweetCountList, retweetedTweetCountList, 'Tweets histogram on 03 July 2018')
 
-# df_original.to_csv('data/OriginalTweets/worldcup' + date + 'original.csv', index=False, encoding='utf-8', header=False)
 
-print(countTweetContainNumbers(df_original))
-print(len(df_original))
+df_nonLink = excludeLink(df_original)
+df_numbers = removeNonNumberTweet(df_nonLink)
+df_stat = df_numbers.loc[df_numbers.iloc[:, 1].str.contains(r'\bstat|record\b')]
+
+print(len(df_numbers))
+print(len(df_stat))
+
+df_original.to_csv('../../data/OriginalTweets/worldcup' + date + 'original.csv', index=False, encoding='utf-8', header=False)
+df_numbers.to_csv('../../data/NumbersTweets/worldcup' + date + 'numbers.csv', index=False, encoding='utf-8', header=False)
