@@ -1,5 +1,6 @@
 from nltk.stem.wordnet import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
+from nltk.corpus import stopwords
 from sklearn import linear_model
 from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
@@ -81,11 +82,14 @@ def plotRidgeCoef(gammas, coefs, errs):
     plt.show()
 
 
-colnames = ['index', 'created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
-            'fact(text)',
-            'statistic(numeric)', 'analytic', 'opinion&emotional', 'advertisment', 'goal', 'team_performance',
-            'player_performance', 'result', 'music', 'food', 'incident', 'image', 'video']
-df = pd.read_csv('../../data/SampledData/roundof16.csv', names=colnames, header=0, sep=',')
+# colnames = ['index', 'created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
+#             'fact(text)',
+#             'statistic(numeric)', 'analytic', 'opinion&emotional', 'advertisment', 'goal', 'team_performance',
+#             'player_performance', 'result', 'music', 'food', 'incident', 'image', 'video']
+# df = pd.read_csv('../../data/SampledData/roundof16.csv', names=colnames, header=0, sep=',')
+colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
+            'fact', 'statistic', 'analysis', 'opinion', 'unrelated']
+df = pd.read_csv('../../data/SampledData/worldcupLabelled2.csv', names=colnames, header=0, sep=',')
 df = df.fillna(value=0)  # filled blank with zero
 df = excludeLink(df)  # remove link from the text
 
@@ -132,7 +136,7 @@ print('number of vocabulary : ' + str(len(model.wv.vocab)))
 
 # Train the doc2vec model
 model.train(iter_tag_doc, total_examples=len(tokenized_text), epochs=100)
-print('model trained')
+print('doc2vec model trained')
 
 # created list of vector
 docvecs = []
@@ -142,113 +146,148 @@ for tag in range(len(iter_tag_doc)):
 print('completed list')
 
 # ================================= Model Part ========================================
-df_output = df.iloc[:, 9:21]
-# df_output = newOutput(df_output)
-df_input = pd.DataFrame(docvecs)
-df_all = pd.concat([df_input, df_output], axis=1, join='inner')
+# y = df.iloc[:, 9:21]
+# x = pd.DataFrame(docvecs)
+# df_all = pd.concat([x, y], axis=1, join='inner')
+#
+# xTrain = x.iloc[0:700, :]
+# xTest = x.iloc[700:1000, :]
+#
+# yTrain = y.iloc[0:700, :]
+# yTest = y.iloc[700:1000, :]
 
-df_input_train = df_input.iloc[0:700, :]
-df_input_test = df_input.iloc[700:1000, :]
+y = df.iloc[:, 9:14]
+x = pd.DataFrame(docvecs)
+df_all = pd.concat([x, y], axis=1, join='inner')
 
-df_output_train = df_output.iloc[0:700, :]
-df_output_test = df_output.iloc[700:1000, :]
+xTrain = x.iloc[0:200, :]
+xTest = x.iloc[200:300, :]
+
+yTrain = y.iloc[0:200, :]
+yTest = y.iloc[200:300, :]
 
 # ================================== Ridge Regression =================================
-num_gamma = 160
-gammas = np.logspace(-5, 10, num_gamma)
-errs = []
-coefs = []
-for gamma in gammas:
-    ridge = linear_model.Ridge(alpha=gamma, fit_intercept=False)
-    ridge.fit(df_input_train, df_output_train)
+def buildRidgeRegression(xTrain, yTrain, xTest, yTest, nGamma = 160):
+    gammas = np.logspace(-5, 10, nGamma)
+    errs = []
+    coefs = []
+    for gamma in gammas:
+        ridge = linear_model.Ridge(alpha=gamma, fit_intercept=False)
+        ridge.fit(xTrain, yTrain)
+        ridge.coef_
+
+        yPredict = ridge.predict(xTest)
+
+        rms = sqrt(mean_squared_error(yTest, yPredict))
+        coefs.append(ridge.coef_)
+        errs.append(rms)
+
+    coefs2 = []
+    for i in range(0, nGamma):
+        coef_temp = coefs[i][0]
+        coefs2.append(coef_temp)
+
+    # plotRidgeCoef(gammas, coefs2, errs)
+    return yPredict
+
+def buildRidgeRegressionClassifier(xTrain, yTrain, xTest, yTest):
+    ridge = linear_model.RidgeClassifierCV(alphas=(0.1, 1.0, 10.0), cv=10)
+    ridge.fit(xTrain, yTrain)
     ridge.coef_
 
-    df_predicted = ridge.predict(df_input_test)
-    result = df_output_test.sub(df_predicted)
+    yPredict = ridge.predict(xTest)
+    return yPredict
 
-    rms = sqrt(mean_squared_error(df_output_test, df_predicted))
-    coefs.append(ridge.coef_)
-    errs.append(rms)
+def buildRidgeRegressionCV(xTrain, yTrain, xTest, yTest, cv):
+    ridge = linear_model.RidgeCV(alphas=(0.1, 1.0, 10.0), cv=cv)
+    ridge.fit(xTrain, yTrain)
+    ridge.coef_
 
-coefs2 = []
-for i in range(0, num_gamma):
-    coef_temp = coefs[i][0]
-    coefs2.append(coef_temp)
+    yPredict = ridge.predict(xTest)
 
-plotRidgeCoef(gammas, coefs2, errs)
+    return yPredict
 
+RRPredict = buildRidgeRegression(xTrain, yTrain, xTest, yTest)
+RRCVPredict = buildRidgeRegressionCV(xTrain, yTrain, xTest, yTest, 10)
+
+RRRMSE = sqrt(mean_squared_error(yTest, RRPredict)) # 0.3324989491864065
+RRCVRMSE = sqrt(mean_squared_error(yTest, RRCVPredict)) # 0.20725988226476166
+print('RRRMSE = ' + str(RRRMSE))
+print('RRCVRMSE = ' + str(RRCVRMSE))
+# RRCPredict = buildRidgeRegressionClassifier(xTrain, yTrain, xTest, yTest)
 # ==================================== SVM ==============================================
-X, y = df_input_train, df_output_train
 clf = OneVsRestClassifier(SVC(kernel='linear', probability=True, class_weight='balanced'))
-clf.fit(X, y)
-proba = clf.predict_proba(df_input_test)
-rms = sqrt(mean_squared_error(df_output_test, proba))
-print(rms)
+clf.fit(xTrain, yTrain)
+yPredict = clf.predict_proba(xTest)
+SVMRMSE = sqrt(mean_squared_error(yTest, yPredict)) # 0.20538432907524162
+print('SVMRMSE = ' + str(SVMRMSE))
 
-# # ==================================== Multi-Label ======================================
-# # ==================================== Binary Relevance =================================
-# # initialize binary relevance multi-label classifier
-# # with a gaussian naive bayes base classifier
-# classifier = BinaryRelevance(GaussianNB())
-#
-# # train
-# classifier.fit(X, y)
-#
-# # predict
-# predictions = classifier.predict(df_input_test)
-# accuracy_binary = accuracy_score(df_output_test, predictions)
-#
-# # ==================================== Classifier Chains =================================
-# # initialize classifier chains multi-label classifier
-# # with a gaussian naive bayes base classifier
-# classifier = ClassifierChain(GaussianNB())
-#
-# # train
-# classifier.fit(X, y)
-#
-# # predict
-# predictions = classifier.predict(df_input_test)
-#
-# accuracy_chain = accuracy_score(df_output_test, predictions)
-#
-#
-# # ==================================== Label Powerset =================================
-# # initialize Label Powerset multi-label classifier
-# # with a gaussian naive bayes base classifier
-# classifier = LabelPowerset(GaussianNB())
-#
-# # train
-# classifier.fit(X, y)
-#
-# # predict
-# predictions = classifier.predict(df_input_test)
-#
-# accuracy_powerset = accuracy_score(df_output_test, predictions)
+# ==================================== Multi-Label ======================================
+# ==================================== Binary Relevance =================================
+# initialize binary relevance multi-label classifier
+# with a gaussian naive bayes base classifier
+classifier = BinaryRelevance(GaussianNB())
 
+# train
+classifier.fit(xTrain, yTrain)
+
+# predict
+yPredict = classifier.predict(xTest)
+accuracy_binary = accuracy_score(yTest, yPredict) # 0.14000000000000001
+yPredict = pd.DataFrame(yPredict.todense())
+BRRMSE = sqrt(mean_squared_error(yTest, yPredict)) # 0.46157941413754094
+print('BRRMSE = ' + str(BRRMSE))
+print('BR ACC = ' + str(accuracy_binary))
+
+# ==================================== Classifier Chains =================================
+# initialize classifier chains multi-label classifier
+# with a gaussian naive bayes base classifier
+classifier = ClassifierChain(GaussianNB())
+
+# train
+classifier.fit(xTrain, yTrain)
+
+# predict
+yPredict = classifier.predict(xTest)
+accuracy_chain = accuracy_score(yTest, yPredict) # 0.00666666666667
+yPredict = pd.DataFrame(yPredict.todense())
+CCRMSE = sqrt(mean_squared_error(yTest, yPredict)) # 0.5416025603090641
+print('CCRMSE = ' + str(CCRMSE))
+print('CC ACC = ' + str(accuracy_chain))
+
+
+# ==================================== Label Powerset =================================
+# initialize Label Powerset multi-label classifier
+# with a gaussian naive bayes base classifier
+classifier = LabelPowerset(GaussianNB())
+
+# train
+xTrain = np.ascontiguousarray(xTrain)
+yTrain = np.ascontiguousarray(yTrain)
+classifier.fit(xTrain, yTrain)
+
+# predict
+yPredict = classifier.predict(xTest)
+accuracy_powerset = accuracy_score(yTest, yPredict) # 0.186666666667
+yPredict = pd.DataFrame(yPredict.todense())
+LPRMSE = sqrt(mean_squared_error(yTest, yPredict)) # 0.3257470047615344
+print('LPRMSE = ' + str(LPRMSE))
+print('LP ACC = ' + str(accuracy_powerset))
 
 # ==================================== LightGBM ========================================
-# train_data = lgb.Dataset(X, label=y)
-# test_data = lgb.Dataset(df_input_test, label=df_output_test)
-#
-# param = {'num_leaves':31, 'num_trees':100, 'objective':'binary', 'num_class': 12}
-# param['metric'] = 'auc'
-#
-# num_round = 10
-# bst = lgb.train(param, train_data, num_round, valid_sets=[test_data])
-# ypred = bst.predict(test_data)
+yPredict = pd.DataFrame()
+for column in yTrain:
+    train_data = lgb.Dataset(xTrain, label=yTrain[column])
+    test_data = lgb.Dataset(xTest, label=yTest[column])
 
-temp = pd.DataFrame()
-for column in df_output_train:
-    train_data = lgb.Dataset(df_input_train, label=df_output_train[column])
-    test_data = lgb.Dataset(df_input_test, label=df_output_test[column])
-
-    param = {'num_leaves':31, 'num_trees':100, 'objective':'binary'}
+    param = {'num_leaves':50, 'num_trees':100, 'objective':'binary'}
     param['metric'] = 'auc'
 
-    num_round = 10
+    num_round = 15
     bst = lgb.train(param, train_data, num_round, valid_sets=[test_data])
-    ypred = bst.predict(df_input_test)
-    temp[column] = pd.Series(ypred)
+    ypred = bst.predict(xTest)
+    yPredict[column] = pd.Series(ypred)
 
-temp.index = np.arange(700, len(temp)+700)
-errs = df_output_test - temp
+yPredict.index = np.arange(700, len(yPredict)+700)
+LGBMRMSE = sqrt(mean_squared_error(yTest, yPredict)) # 0.3257470047615344
+print('LGBMRMSE = ' + str(LGBMRMSE))

@@ -5,9 +5,10 @@ import pandas as pd
 import numpy as np
 from operator import itemgetter
 from datetime import datetime
-dateList = ['2018-06-30', '2018-07-01', '2018-07-02', '2018-07-03']
-inputFileList = ['data/OriginalTweets/worldcup' + date + 'original.csv' for date in dateList]
-outputFileName = 'data/SampledData/roundof16.csv'
+dateList = ['2018-06-30', '2018-07-01', '2018-07-02', '2018-07-03', '2018-07-06', '2018-07-07', '2018-07-10',
+            '2018-07-11', '2018-07-14', '2018-07-15']
+inputFileList = ['../../data/NumbersTweets/worldcup' + date + 'nonnumbers.csv' for date in dateList]
+outputFileName = '../../data/SampledData/worldcupNonnumbers1000samples.csv'
 
 # content = open('data/OriginalTweets/worldcup2018-07-03original.csv', "r", encoding='utf-8').read().replace('\r\n','\n')
 #

@@ -67,8 +67,8 @@ def JSONToCsvExtraction(inputFileList, outputFile):
 
 
 
-date = "2018-07-14"
-num_input_file = 3
+date = "2018-07-13"
+num_input_file = 5
 
 rawDataPath = '../../data/rawData/'
 rawDataFileName = 'worldcup'
@@ -78,7 +78,8 @@ rawJSONInputPath = 'C:/Users/JaZz-/Documents/Dissertation/data/'
 rawJSONInputFileName = 'worldcup'
 rawJSONInputFileList = [rawJSONInputPath + rawJSONInputFileName + date + '-' + str(i) + '.txt' for i in range(1, num_input_file + 1)]
 
-rawJSONOutputPath = '../../data/rawDataFromJSON/'
+# rawJSONOutputPath = '../../data/rawDataFromJSON/'
+rawJSONOutputPath = 'C:/Users/JaZz-/Documents/Dissertation/data/'
 rawJSONOutputFileName = 'worldcup'
 rawJSONOutputFileName = rawJSONOutputPath + rawJSONOutputFileName + date + '.csv'
 

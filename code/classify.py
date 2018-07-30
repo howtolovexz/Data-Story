@@ -47,7 +47,6 @@ def plotTweetsHistrogram(tweetCountList, title):
     locs, labels = plt.xticks()
     plt.setp(labels, rotation=90)
     ax.set_xticklabels([i for i in range(1, 25)])
-    plt.yticks(np.arange(0, 120000, 10000))
 
     plt.xlabel('Hour')
     plt.ylabel('Number of Tweets')
@@ -55,6 +54,7 @@ def plotTweetsHistrogram(tweetCountList, title):
 
     plt.xlim([-0.5, 23.5])
     plt.bar(pos, [j[2] for j in tweetCountList], width, color='b', edgecolor='black')
+    plt.yticks(np.arange(0, 310000, 20000))
     plt.show()
 
 
@@ -68,16 +68,19 @@ def plotStackedTweetsHistrogram(tweetCountList1, tweetCountList2, title):
     locs, labels = plt.xticks()
     plt.setp(labels, rotation=90)
     ax.set_xticklabels([i for i in range(1, 25)])
-    plt.yticks(np.arange(0, 120000, 10000))
 
     plt.xlabel('Hour')
     plt.ylabel('Number of Tweets')
     ax.set_title(title)
 
     plt.xlim([-0.5, 23.5])
-    p1 = plt.bar(pos, [j[2] for j in tweetCountList1], width, color='b', edgecolor='black')
-    p2 = plt.bar(pos, [j[2] for j in tweetCountList2], width, color='r', edgecolor='black', bottom=[j[2] for j in tweetCountList1])
+    p1 = plt.bar(pos, [j[2] for j in tweetCountList1], width, color='#1a75ff', edgecolor='black')
+    p2 = plt.bar(pos, [j[2] for j in tweetCountList2], width, color='#ff9933', edgecolor='black', bottom=[j[2] for j in tweetCountList1])
+    plt.yticks(np.arange(0, 210000, 10000))
     plt.show()
+    plt.subplots_adjust(left=0.17, right=0.92, top=0.92, bottom=0.12)
+    plt.savefig(title + '.png')
+    plt.close()
 
 def hasNumbers(inputString):
     return any(char.isdigit() for char in inputString)
@@ -93,35 +96,51 @@ def removeNonNumberTweet(df):
     df_temp = df.loc[df.iloc[:, 1].str.contains(r'\d')]
     return df_temp
 
+def removeNumberTweet(df):
+    df_temp = df.loc[~df.iloc[:, 1].str.contains(r'\d')]
+    return df_temp
+
 def excludeLink(df):
     df = df.replace(regex=r"http\S+", value='')
     return df
 
-date = '2018-06-30'
-inputFilePath = '../../data/rawDataFromJSON/'
-inputFileName = inputFilePath + 'worldcup' + date + '.csv'
+for i in range(1, 16):
+    date = '2018-07-'
+# for i in range(30, 31):
+#     date = '2018-06-'
+    if i < 10:
+        date = date + '0' + str(i)
+    else:
+        date = date + str(i)
+    inputFilePath = '../../data/rawDataFromJSON/'
+    inputFileName = inputFilePath + 'worldcup' + date + '.csv'
 
-colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status']
-df = pd.read_csv(inputFileName, names=colnames)
-df['created_at'] = pd.to_datetime(df['created_at'])  # change string to datetime
-df_original = getOriginalTweets(df)
-df_retweeted = getRetweetedTweets(df)
+    colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status']
+    df = pd.read_csv(inputFileName, names=colnames)
+    df['created_at'] = pd.to_datetime(df['created_at'])  # change string to datetime
+    df_original = getOriginalTweets(df)
+    df_retweeted = getRetweetedTweets(df)
 
-originalTweetCountList = getTweetCountList(df_original)
-retweetedTweetCountList = getTweetCountList(df_retweeted)
+    originalTweetCountList = getTweetCountList(df_original)
+    retweetedTweetCountList = getTweetCountList(df_retweeted)
 
-# plotTweetsHistrogram(originalTweetCountList, 'Original Tweets histogram on 30 June 2018')
-# plotTweetsHistrogram(retweetedTweetCountList, 'Retweeted Tweets histogram on 30 June 2018')
-#
-# plotStackedTweetsHistrogram(originalTweetCountList, retweetedTweetCountList, 'Tweets histogram on 03 July 2018')
+    date = str(datetime.strptime(date, '%Y-%m-%d').strftime('%d %b %Y'))
+    plotTweetsHistrogram(originalTweetCountList, 'Original Tweets histogram on ' + date)
+    plotTweetsHistrogram(retweetedTweetCountList, 'Retweeted Tweets histogram on ' + date)
+
+    plotStackedTweetsHistrogram(originalTweetCountList, retweetedTweetCountList, 'Tweets histogram on ' + date)
 
 
-df_nonLink = excludeLink(df_original)
-df_numbers = removeNonNumberTweet(df_nonLink)
-df_stat = df_numbers.loc[df_numbers.iloc[:, 1].str.contains(r'\bstat|record\b')]
 
-print(len(df_numbers))
-print(len(df_stat))
+# df_nonLink = excludeLink(df_original)
+# df_numbers = removeNonNumberTweet(df_nonLink)
+# df_nonnumbers = removeNumberTweet(df_nonLink)
+# df_stat = df_numbers.loc[df_numbers.iloc[:, 1].str.contains(r'\bstat|record\b')]
 
-df_original.to_csv('../../data/OriginalTweets/worldcup' + date + 'original.csv', index=False, encoding='utf-8', header=False)
-df_numbers.to_csv('../../data/NumbersTweets/worldcup' + date + 'numbers.csv', index=False, encoding='utf-8', header=False)
+# print(len(df_numbers))
+# print(len(df_stat))
+
+# df_original.to_csv('../../data/OriginalTweets/worldcup' + date + 'original.csv', index=False, encoding='utf-8', header=False)
+# df_numbers.to_csv('../../data/NumbersTweets/worldcup' + date + 'numbers.csv', index=False, encoding='utf-8', header=False)
+# df_nonnumbers.to_csv('../../data/NumbersTweets/worldcup' + date + 'nonnumbers.csv', index=False, encoding='utf-8', header=False)
+# df_stat.to_csv('../../data/StatisticTweets/worldcup' + date + 'statistic.csv', index=False, encoding='utf-8', header=False)
