@@ -5,10 +5,12 @@ import pandas as pd
 import numpy as np
 from operator import itemgetter
 from datetime import datetime
-dateList = ['2018-06-30', '2018-07-01', '2018-07-02', '2018-07-03', '2018-07-06', '2018-07-07', '2018-07-10',
-            '2018-07-11', '2018-07-14', '2018-07-15']
+# dateList = ['2018-06-30', '2018-07-01', '2018-07-02', '2018-07-03', '2018-07-06', '2018-07-07', '2018-07-10',
+#             '2018-07-11', '2018-07-14', '2018-07-15'] # match
+dateList = ['2018-07-04', '2018-07-05', '2018-07-08', '2018-07-09',
+            '2018-07-12', '2018-07-13'] # no match
 inputFileList = ['../../data/NumbersTweets/worldcup' + date + 'nonnumbers.csv' for date in dateList]
-outputFileName = '../../data/SampledData/worldcupNonnumbers1000samples.csv'
+outputFileName = '../../data/SampledData/nomatchNonNumbers500samples.csv'
 
 # content = open('data/OriginalTweets/worldcup2018-07-03original.csv', "r", encoding='utf-8').read().replace('\r\n','\n')
 #
@@ -23,7 +25,7 @@ for inputFileName in inputFileList:
     df_temp = pd.read_csv(inputFileName, names=colnames, encoding='utf-8', lineterminator='\n', dtype={'text': str, 'followers': np.int, 'friends': np.int, 'rt': np.int, 'fav': np.int, 'retweeted_status': bool})
     df = df.append(df_temp)
 
-df = df.sample(1000)
+df = df.sample(500)
 df.to_csv(outputFileName, encoding='utf-8', index=False, header=False)
 
 
