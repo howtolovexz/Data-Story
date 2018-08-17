@@ -2,15 +2,17 @@ from nltk.stem.wordnet import WordNetLemmatizer
 from nltk.tokenize import RegexpTokenizer
 from nltk.corpus import stopwords
 from sklearn import linear_model
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.datasets import make_multilabel_classification
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, GridSearchCV, cross_val_score
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import accuracy_score
 from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split
 from skmultilearn.problem_transform import BinaryRelevance
 from skmultilearn.problem_transform import ClassifierChain
 from skmultilearn.problem_transform import LabelPowerset
@@ -22,6 +24,7 @@ import numpy as np
 import lightgbm as lgb
 import datetime as dt
 import scipy
+import csv
 from scipy.io import arff
 
 
@@ -81,22 +84,19 @@ def plotRidgeCoef(gammas, coefs, errs):
     plt.legend()
     plt.show()
 
-
-# colnames = ['index', 'created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
-#             'fact(text)',
-#             'statistic(numeric)', 'analytic', 'opinion&emotional', 'advertisment', 'goal', 'team_performance',
-#             'player_performance', 'result', 'music', 'food', 'incident', 'image', 'video']
-# df = pd.read_csv('../../data/SampledData/roundof16.csv', names=colnames, header=0, sep=',')
-colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
-            'fact', 'statistic', 'analysis', 'opinion', 'unrelated']
-df = pd.read_csv('../../data/SampledData/ver 2/traintest.csv', names=colnames, header=0, sep=',')
-# colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
-#             'statistic', 'non statistic']
-# df = pd.read_csv('../../data/SampledData/ver 2/2classes.csv', names=colnames, header=0, sep=',')
-df = df.fillna(value=0)  # filled blank with zero
-df = excludeLink(df)  # remove link from the text
+def plotBoxPlot(data, label, title):
+    fig = plt.figure()
+    axes = fig.add_subplot(1, 1, 1)
+    axes.boxplot(data, labels=label)
+    axes.set_title(title)
+    plt.xticks(rotation=90)
+    fig.tight_layout()
+    plt.show()
 
 
+# =============================================================================
+# cleaning data
+# =============================================================================
 def cleaningData(df):
     tokenized_text = []
     tokenizer = RegexpTokenizer("\w+|%|-")
@@ -127,16 +127,12 @@ def cleaningData(df):
     return tokenized_text
 
 
-tokenized_text = cleaningData(df)
-iter_tag_doc = list(read_corpus(tokenized_text))
-
-
 # =============================================================================
 # train data by doc2vec
 # =============================================================================
-def createDoc2VecModel(iter_tag_doc):
+def createDoc2VecModel(iter_tag_doc, vectorSize):
     # Create a Doc2Vec model
-    model = gensim.models.Doc2Vec(vector_size=200, min_count=0
+    model = gensim.models.Doc2Vec(vector_size=vectorSize, min_count=0
                                   , alpha=0.025, min_alpha=0.025
                                   , seed=0, workers=4)
 
@@ -157,19 +153,15 @@ def createDoc2VecModel(iter_tag_doc):
     return docvecs
 
 
-docvecs = createDoc2VecModel(iter_tag_doc)
-# ================================= Model Part ========================================
-y = df.iloc[:, 8:14]
-x = pd.DataFrame(docvecs)
-df_all = pd.concat([x, y], axis=1, join='inner')
-
-xTrain = x.iloc[0:300, :]
-xTest = x.iloc[300:500, :]
-
-yTrain = y.iloc[0:300, :]
-yTest = y.iloc[300:500, :]
+# ============================= Export doc2vec list ===========================
+def exportDoc2VecToCSV(docvecs):
+    fileName = '../../data/SampledData/ver 2/Labelled/doc2vec.csv'
+    np.savetxt(fileName, docvecs, delimiter=",")
 
 
+# =============================================================================
+# Model section
+# =============================================================================
 # ================================== Ridge Regression =================================
 def buildRidgeRegression(xTrain, yTrain, xTest, yTest, nGamma=160):
     gammas = np.logspace(-5, 10, nGamma)
@@ -211,16 +203,6 @@ def buildRidgeRegressionCV(xTrain, yTrain, cv):
     return ridge
 
 
-# def probToBinary(yPredict):
-#     for i in range(0, len(yPredict)):
-#         if yPredict[i][0] >= .5:  # setting threshold to .5
-#             yPredict[i][0] = 1
-#             yPredict[i][1] = 0
-#         else:
-#             yPredict[i][0] = 0
-#             yPredict[i][1] = 1
-#     return yPredict
-
 def probToBinary(yPredict):
     for i in range(0, len(yPredict)):
         for j in range(0, yPredict.shape[1]):
@@ -231,34 +213,25 @@ def probToBinary(yPredict):
     return yPredict
 
 
-# RRPredict = buildRidgeRegression(xTrain, yTrain, xTest, yTest)
-# RRRMSE = sqrt(mean_squared_error(yTest, RRPredict)) # 0.3324989491864065
-# print('RRRMSE = ' + str(RRRMSE))
-
-RRCVModel = buildRidgeRegressionCV(xTrain, yTrain, 15)
-RRCVPredict = RRCVModel.predict(xTest)
-RRCVPredict = probToBinary(RRCVPredict)
-RRCVRMSE = sqrt(mean_squared_error(yTest, RRCVPredict))  # 0.20725988226476166
-RRCVACC = accuracy_score(yTest, RRCVPredict)  # 0.14000000000000001
-print('RRCVRMSE = ' + str(RRCVRMSE))
-print('RRCVACC = ' + str(RRCVACC))
-
-
 # ==================================== SVM ==============================================
 def buildSVMClassifier(xTrain, yTrain):
-    clf = OneVsRestClassifier(SVC(kernel='linear', probability=True, class_weight='balanced'))
+    clf = OneVsRestClassifier(SVC(C=1.0, cache_size=200, class_weight=None, coef0=0.0,
+                                  decision_function_shape='ovo', degree=3, gamma='auto', kernel='rbf',
+                                  max_iter=-1, probability=False, random_state=None, shrinking=True,
+                                  tol=0.001, verbose=False))
     clf.fit(xTrain, yTrain)
 
     return clf
 
 
-SVMModel = buildSVMClassifier(xTrain, yTrain)
-SVMPredict = SVMModel.predict(xTest)
-SVMPredict = probToBinary(SVMPredict)
-SVMRMSE = sqrt(mean_squared_error(yTest, SVMPredict))  # 0.20538432907524162
-SVMACC = accuracy_score(yTest, SVMPredict)
-print('SVMRMSE = ' + str(SVMRMSE))
-print('SVMACC = ' + str(SVMACC))
+def buildSVMCVClassifier(xTrain, yTrain):
+    svc = OneVsRestClassifier(SVC(C=1.0, cache_size=200, class_weight='balanced', coef0=0.0,
+                                  decision_function_shape='ovo', degree=3, gamma='auto', kernel='rbf',
+                                  max_iter=-1, probability=False, random_state=None, shrinking=True,
+                                  tol=0.001, verbose=False))
+    Cs = np.logspace(-6, -1, 10)
+    clf = GridSearchCV(estimator=svc, param_grid=dict(C=Cs), n_jobs=-1)
+    clf.fit(xTrain, yTrain)
 
 
 # ==================================== Multi-Label ======================================
@@ -273,15 +246,6 @@ def buildBRClassifier(xTrain, yTrain):
     return classifier
 
 
-BRModel = buildBRClassifier(xTrain, yTrain)
-BRPredict = BRModel.predict(xTest)
-BRACC = accuracy_score(yTest, BRPredict)  # 0.14000000000000001
-BRPredict = pd.DataFrame(BRPredict.todense())
-BRRMSE = sqrt(mean_squared_error(yTest, BRPredict))  # 0.46157941413754094
-print('BRRMSE = ' + str(BRRMSE))
-print('BR ACC = ' + str(BRACC))
-
-
 # ==================================== Classifier Chains =================================
 def buildCCClassifier(xTrain, yTrain):
     # initialize classifier chains multi-label classifier
@@ -291,15 +255,6 @@ def buildCCClassifier(xTrain, yTrain):
     # train
     classifier.fit(xTrain, yTrain)
     return classifier
-
-
-CCModel = buildCCClassifier(xTrain, yTrain)
-CCPredict = CCModel.predict(xTest)
-CCACC = accuracy_score(yTest, CCPredict)  # 0.00666666666667
-CCPredict = pd.DataFrame(CCPredict.todense())
-CCRMSE = sqrt(mean_squared_error(yTest, CCPredict))  # 0.5416025603090641
-print('CCRMSE = ' + str(CCRMSE))
-print('CC ACC = ' + str(CCACC))
 
 
 # ==================================== Label Powerset =================================
@@ -316,15 +271,6 @@ def buildLBClassifier(xTrain, yTrain):
     return classifier
 
 
-LPModel = buildLBClassifier(xTrain, yTrain)
-LPPredict = LPModel.predict(xTest)
-LPACC = accuracy_score(yTest, LPPredict)  # 0.186666666667
-LPPredict = pd.DataFrame(LPPredict.todense())
-LPRMSE = sqrt(mean_squared_error(yTest, LPPredict))  # 0.3257470047615344
-print('LPRMSE = ' + str(LPRMSE))
-print('LP ACC = ' + str(LPACC))
-
-
 # ==================================== LightGBM ========================================
 def buildLGBMClassifier(xTrain, yTrain, xTest, yTest):
     LGBMClassifier = []
@@ -334,43 +280,22 @@ def buildLGBMClassifier(xTrain, yTrain, xTest, yTest):
 
         params = {}
         params['learning_rate'] = 0.001
+        params['num_iterations'] = 100
         params['boosting_type'] = 'gbdt'
-        params['objective'] = 'binary'
-        params['metric'] = 'binary_logloss'
-        params['sub_feature'] = 0.5
-        params['num_leaves'] = 10
-        params['min_data'] = 50
-        params['max_depth'] = 10
-
+        params['objective'] = 'regression_l2'
+        params['metric'] = 'l2_root'
+        params['num_leaves'] = 100
+        params['max_depth'] = 7
+        params['max_bin'] = 100
         num_round = 20
         classifier = lgb.train(params, train_data, num_round, valid_sets=[test_data])
         LGBMClassifier.append(classifier)
     return LGBMClassifier
 
-# def buildLGBMClassifier(xTrain, yTrain, xTest, yTest):
-#     LGBMClassifier = []
-#     for column in yTrain:
-#         train_data = lgb.Dataset(xTrain, label=yTrain[column])
-#         test_data = lgb.Dataset(xTest, label=yTest[column])
-#
-#         params = {}
-#         params['learning_rate'] = 0.001
-#         params['boosting_type'] = 'gbdt'
-#         params['objective'] = 'multiclass'
-#         params['metric'] = 'multi_logloss'
-#         params['sub_feature'] = 0.5
-#         params['num_leaves'] = 10
-#         params['min_data'] = 50
-#         params['max_depth'] = 10
-#         params['num_class'] = 2
-#
-#         num_round = 20
-#         classifier = lgb.train(params, train_data, num_round, valid_sets=[test_data])
-#         LGBMClassifier.append(classifier)
-#     return LGBMClassifier
 
 def predictLGBM(LGBMModel, xTest, yTrain):
     LGBMPredicts = pd.DataFrame()
+    LGBMPredictsBinary = pd.DataFrame()
     numColumn = 0
     count = 0
     columnName = []
@@ -381,72 +306,167 @@ def predictLGBM(LGBMModel, xTest, yTrain):
 
     for model in LGBMModel:
         LGBMPredict = model.predict(xTest)
+        print(LGBMPredict)
+        LGBMPredictBinary = LGBMPredict
         for i in range(0, len(LGBMPredict)):
-            if LGBMPredict[i] >= .5:  # setting threshold to .5
-                LGBMPredict[i] = 1
+            if LGBMPredictBinary[i] >= .5:  # setting threshold to .5
+                LGBMPredictBinary[i] = 1
             else:
-                LGBMPredict[i] = 0
+                LGBMPredictBinary[i] = 0
         LGBMPredicts[columnName[count]] = pd.Series(LGBMPredict)
+        LGBMPredictsBinary[columnName[count]] = pd.Series(LGBMPredictBinary)
         count = count + 1
-    return LGBMPredicts
+    return LGBMPredicts, LGBMPredictsBinary
 
 
-LGBMModel = buildLGBMClassifier(xTrain, yTrain, xTest, yTest)
-LGBMPredict = predictLGBM(LGBMModel, xTest, yTrain)
-LGBMPredict.index = np.arange(300, len(LGBMPredict)+300)
-LGBMRMSE = sqrt(mean_squared_error(yTest, LGBMPredict))
-LGBMACC = accuracy_score(yTest, LGBMPredict)
-print('LGBMRMSE = ' + str(LGBMRMSE))
-print('LGBM ACC = ' + str(LGBMACC))
+# ======================= Random Forest =========================
+def buildRandomForestClassifier(xTrain, yTrain):
+    clf = RandomForestClassifier(n_estimators=20, max_depth=2, min_samples_split=10, random_state=0, class_weight=None)
+    clf.fit(xTrain, yTrain)
+
+    return clf
 
 
-
-# yPredict = pd.DataFrame()
-# for column in yTrain:
-#     train_data = lgb.Dataset(xTrain, label=yTrain[column])
-#     test_data = lgb.Dataset(xTest, label=yTest[column])
-#
-#     params = {}
-#     params['learning_rate'] = 0.001
-#     params['boosting_type'] = 'gbdt'
-#     params['objective'] = 'binary'
-#     params['metric'] = 'binary_logloss'
-#     params['sub_feature'] = 0.5
-#     params['num_leaves'] = 10
-#     params['min_data'] = 50
-#     params['max_depth'] = 10
-#
-#     num_round = 20
-#     bst = lgb.train(params, train_data, num_round, valid_sets=[test_data])
-#     ypred = bst.predict(xTest)
-#     for i in range(0, len(ypred)):
-#         if ypred[i] >= .5:  # setting threshold to .5
-#             ypred[i] = 1
-#         else:
-#             ypred[i] = 0
-#     yPredict[column] = pd.Series(ypred)
-#
-# yPredict.index = np.arange(250, len(yPredict)+250)
-# LGBMRMSE = sqrt(mean_squared_error(yTest, yPredict))
-# accuracy_lgbm = accuracy_score(yTest, yPredict)
-# print('LGBMRMSE = ' + str(LGBMRMSE))
-# print('LGBM ACC = ' + str(accuracy_lgbm))
-
-
+# ======================================= Main Program =================================================
+fileName = '../../data/SampledData/ver 2/Labelled/train2classes.csv'
 # colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
-#             'statistic', 'non statistic']
-# df_prediction = pd.read_csv('../../data/OriginalTweets/worldcup2018-07-04original.csv', names=colnames, header=0,
-#                             sep=',')
-# df_prediction = df_prediction.fillna(value=0)  # filled blank with zero
-# df_prediction = excludeLink(df_prediction)  # remove link from the text
-# df_prediction = df_prediction.iloc[0:2500, :]
-#
-# tokenized_text = cleaningData(df_prediction)
+#             'fact', 'statistic', 'analysis', 'opinion', 'unrelated', 'etc', 'score', 'goal', 'bet', 'match quality',
+#             'world record', 'tournament record', 'team performance', 'personal performance', 'team record',
+#             'personal record', 'number of attender', 'music', 'food']
+colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
+            'statistic', 'non statistic', 'etc', 'score', 'goal', 'bet', 'match quality',
+            'world record', 'tournament record', 'team performance', 'personal performance', 'team record',
+            'personal record', 'number of attender', 'music', 'food']
+# colnames = ['created_at', 'text', 'screen_name', 'followers', 'friends', 'rt', 'fav', 'retweeted_status',
+#             'fact', 'statistic', 'opinion', 'unrelated', 'etc', 'score', 'goal', 'bet', 'match quality',
+#             'world record', 'tournament record', 'team performance', 'personal performance', 'team record',
+#             'personal record', 'number of attender', 'music', 'food']
+df = pd.read_csv(fileName, names=colnames, header=0, sep=',')
+df = df.fillna(value=0)  # filled blank with zero
+df = excludeLink(df)  # remove link from the text
+
+# df.opinion = pd.to_numeric(df.opinion, errors='coerce')
+
+# tokenized_text = cleaningData(df)
 # iter_tag_doc = list(read_corpus(tokenized_text))
-# docvecs = createDoc2VecModel(iter_tag_doc)
 #
+# vectorSize = 100
+# docvecs = createDoc2VecModel(iter_tag_doc, vectorSize)
+# exportDoc2VecToCSV(docvecs)
+
+# ================================= Prepare train & test data ========================================
+numRow = len(df)
+numTrain = 500
+y = df.iloc[:, 8:10]
 # x = pd.DataFrame(docvecs)
-# yPredict = LPModel.predict(x)
-# yPredict = pd.DataFrame(yPredict.todense())
-# yPredict.to_csv('../../data/OriginalTweets/worldcup2018-07-04originalx.csv', encoding='utf-8', index=False,
-#                 header=False)
+x = pd.read_csv('../../data/SampledData/ver 2/Labelled/doc2vec.csv', sep=',', header=None)
+df_all = pd.concat([x, y], axis=1, join='inner')
+
+xTrain = x.iloc[0:numTrain, :]
+xTest = x.iloc[numTrain:numRow, :]
+
+yTrain = y.iloc[0:numTrain, :]
+yTest = y.iloc[numTrain:numRow, :]
+
+kf = KFold(n_splits=10, shuffle=True, random_state=0)
+RRCVRMSEList = []
+SVMRMSEList = []
+BRRMSEList = []
+CCRMSEList = []
+LPRMSEList = []
+LGBMRMSEList = []
+RFRMSEList = []
+
+RRCVACCList = []
+SVMACCList = []
+BRACCList = []
+CCACCList = []
+LPACCList = []
+LGBMACCList = []
+RFACCList = []
+for train_index, test_index in kf.split(x):
+    xTrain = x.iloc[train_index]
+    xTest = x.iloc[test_index]
+    yTrain = y.iloc[train_index]
+    yTest = y.iloc[test_index]
+
+    # ================================= Model Part ========================================
+    RRCVModel = buildRidgeRegressionCV(xTrain, yTrain, 10)
+    RRCVPredict = RRCVModel.predict(xTest)
+    RRCVPredictBinary = probToBinary(RRCVPredict)
+    RRCVRMSE = sqrt(mean_squared_error(yTest, RRCVPredict))
+    RRCVACC = accuracy_score(yTest, RRCVPredictBinary)
+    print('RRCVRMSE = ' + str(RRCVRMSE))
+    print('RRCVACC = ' + str(RRCVACC))
+
+    SVMModel = buildSVMClassifier(xTrain, yTrain)
+    SVMPredict = SVMModel.predict(xTest)
+    SVMPredictBinary = probToBinary(SVMPredict)
+    SVMRMSE = sqrt(mean_squared_error(yTest, SVMPredict))
+    SVMACC = accuracy_score(yTest, SVMPredictBinary)
+    print('SVMRMSE = ' + str(SVMRMSE))
+    print('SVMACC = ' + str(SVMACC))
+
+    BRModel = buildBRClassifier(xTrain, yTrain)
+    BRPredict = BRModel.predict(xTest)
+    BRACC = accuracy_score(yTest, BRPredict)
+    BRPredict = pd.DataFrame(BRPredict.todense())
+    BRRMSE = sqrt(mean_squared_error(yTest, BRPredict))
+    print('BRRMSE = ' + str(BRRMSE))
+    print('BR ACC = ' + str(BRACC))
+
+    CCModel = buildCCClassifier(xTrain, yTrain)
+    CCPredict = CCModel.predict(xTest)
+    CCACC = accuracy_score(yTest, CCPredict)
+    CCPredict = pd.DataFrame(CCPredict.todense())
+    CCRMSE = sqrt(mean_squared_error(yTest, CCPredict))
+    print('CCRMSE = ' + str(CCRMSE))
+    print('CC ACC = ' + str(CCACC))
+
+    LPModel = buildLBClassifier(xTrain, yTrain)
+    LPPredict = LPModel.predict(xTest)
+    LPACC = accuracy_score(yTest, LPPredict)
+    LPPredict = pd.DataFrame(LPPredict.todense())
+    LPRMSE = sqrt(mean_squared_error(yTest, LPPredict))
+    print('LPRMSE = ' + str(LPRMSE))
+    print('LP ACC = ' + str(LPACC))
+
+    LGBMModel = buildLGBMClassifier(xTrain, yTrain, xTest, yTest)
+    LGBMPredict, LGBMPredictBinary = predictLGBM(LGBMModel, xTest, yTrain)
+    LGBMPredict.index = np.arange(numTrain, len(LGBMPredict) + numTrain)
+    LGBMRMSE = sqrt(mean_squared_error(yTest, LGBMPredict))
+    LGBMACC = accuracy_score(yTest, LGBMPredict)
+    print('LGBMRMSE = ' + str(LGBMRMSE))
+    print('LGBM ACC = ' + str(LGBMACC))
+
+    RFModel = buildRandomForestClassifier(xTrain, yTrain)
+    RFPredict = RFModel.predict(xTest)
+    RFRMSE = sqrt(mean_squared_error(yTest, RFPredict))
+    RFACC = accuracy_score(yTest, RFPredict)
+    print('RFRMSE = ' + str(RFRMSE))
+    print('RF ACC = ' + str(RFACC))
+
+    RRCVRMSEList.append(RRCVRMSE)
+    SVMRMSEList.append(SVMRMSE)
+    BRRMSEList.append(BRRMSE)
+    CCRMSEList.append(CCRMSE)
+    LPRMSEList.append(LPRMSE)
+    LGBMRMSEList.append(LGBMRMSE)
+    RFRMSEList.append(RFRMSE)
+
+    RRCVACCList.append(RRCVACC)
+    SVMACCList.append(SVMACC)
+    BRACCList.append(BRACC)
+    CCACCList.append(CCACC)
+    LPACCList.append(LPACC)
+    LGBMACCList.append(LGBMACC)
+    RFACCList.append(RFACC)
+
+# basic plot
+ACCList = [RRCVACCList, SVMACCList, BRACCList, CCACCList, LPACCList, LGBMACCList, RFACCList]
+RMSEList = [RRCVRMSEList, SVMRMSEList, BRRMSEList, CCRMSEList, LPRMSEList, LGBMRMSEList, RFRMSEList]
+label = ['Ridge Regression', 'SVM', 'Binary Relevance', 'Classifier Chains', 'Label Powerset', 'LightGBM', 'Random Forest']
+title = 'Models Accuracy'
+plotBoxPlot(ACCList, label, title)
+title = 'Models RMSE'
+plotBoxPlot(RMSEList, label, title)
